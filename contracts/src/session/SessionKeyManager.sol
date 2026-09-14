@@ -30,8 +30,16 @@ abstract contract SessionKeyManager is ISessionKeyManager {
         require(validUntil > block.timestamp, "SessionKeyManager: already expired");
         require(spendingLimit <= type(uint128).max, "SessionKeyManager: spending limit overflow");
 
-        _sessionKeys[sessionKey] =
-            SessionKeyPermissions({spendingLimit: uint128(spendingLimit), spent: 0, validUntil: validUntil, revoked: false, granted: true});
+        // Safe: bounded by the require(spendingLimit <= type(uint128).max) above.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint128 boundedSpendingLimit = uint128(spendingLimit);
+        _sessionKeys[sessionKey] = SessionKeyPermissions({
+            spendingLimit: boundedSpendingLimit,
+            spent: 0,
+            validUntil: validUntil,
+            revoked: false,
+            granted: true
+        });
 
         for (uint256 i = 0; i < allowedTargets.length; i++) {
             _allowedTargets[sessionKey][allowedTargets[i]] = true;
@@ -55,6 +63,9 @@ abstract contract SessionKeyManager is ISessionKeyManager {
         uint256 newSpent = uint256(perm.spent) + amount;
         require(newSpent <= perm.spendingLimit, "SessionKeyManager: exceeds spending limit");
 
+        // Safe: bounded by the require(newSpent <= perm.spendingLimit) above, and
+        // spendingLimit is itself a uint128.
+        // forge-lint: disable-next-line(unsafe-typecast)
         perm.spent = uint128(newSpent);
         emit SessionKeySpent(sessionKey, amount, perm.spendingLimit - perm.spent);
     }
