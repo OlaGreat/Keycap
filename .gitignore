@@ -1,0 +1,21 @@
+# AI tooling artifacts — never tracked
+.claude/
+.qodo/
+CLAUDE.md
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+contracts/broadcast/**/dry-run/
+
+# Node
+node_modules/
+dist/
+build/
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+*.swp
