@@ -1,0 +1,22 @@
+{
+  "name": "keycap-agent",
+  "version": "1.0.0",
+  "description": "Demo AI agent that decides whether to spend against its Keycap session key, then signs and submits the call on-chain.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "dotenv": "^17.4.2",
+    "viem": "^2.56.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
