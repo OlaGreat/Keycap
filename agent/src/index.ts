@@ -6,6 +6,7 @@ import { hashCall } from "./callHash.js";
 import { decideWhetherToCall } from "./decide.js";
 import { PasskeyAccountAbi } from "./abi/PasskeyAccount.js";
 import { PaidAPIAbi } from "./abi/PaidAPI.js";
+import { ReasoningLogAbi } from "./abi/ReasoningLog.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -16,6 +17,7 @@ function requireEnv(name: string): string {
 const ACCOUNT_ADDRESS = requireEnv("ACCOUNT_ADDRESS") as Address;
 const PAID_API_ADDRESS = requireEnv("PAID_API_ADDRESS") as Address;
 const SESSION_KEY_PRIVATE_KEY = requireEnv("SESSION_KEY_PRIVATE_KEY") as Hex;
+const REASONING_LOG_ADDRESS = requireEnv("REASONING_LOG_ADDRESS") as Address;
 
 const sessionKey = privateKeyToAccount(SESSION_KEY_PRIVATE_KEY);
 
@@ -86,6 +88,20 @@ async function runOnce(): Promise<void> {
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
   console.log(`[agent] confirmed in block ${receipt.blockNumber}: ${txHash}`);
+
+  // Logged only after a confirmed spend, bound to the same call hash that was
+  // signed — so every real spend has an inspectable, on-chain "why" attached
+  // to it, not just a pass/fail gate. A declined decision has no call to bind
+  // reasoning to, so it's only logged to the console, not on-chain.
+  const logTxHash = await walletClient.writeContract({
+    address: REASONING_LOG_ADDRESS,
+    abi: ReasoningLogAbi,
+    functionName: "logReasoning",
+    args: [challenge, decision.reasoning],
+    chain: monadTestnet,
+  });
+  await publicClient.waitForTransactionReceipt({ hash: logTxHash });
+  console.log(`[agent] reasoning logged: ${logTxHash}`);
 }
 
 async function main(): Promise<void> {
