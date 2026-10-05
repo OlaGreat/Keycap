@@ -3,7 +3,7 @@ import type { Address } from "viem";
 import { createPasskey } from "./lib/webauthn";
 import { createAccount, grantSessionKey, getSessionKeyInfo, getBalance, type SessionKeyInfo } from "./lib/account";
 import { relayerAddress } from "./lib/relayer";
-import { PAID_API_ADDRESS } from "./lib/contracts";
+import { CANDIDATE_TARGETS } from "./lib/contracts";
 import { loadWallet, saveWallet, type StoredWallet } from "./lib/storage";
 import "./App.css";
 
@@ -70,7 +70,7 @@ export default function App() {
         wallet.accountAddress,
         wallet.credentialId,
         sessionKeyAddress as Address,
-        [PAID_API_ADDRESS],
+        CANDIDATE_TARGETS,
         spendLimitWei,
         validUntil,
       );
