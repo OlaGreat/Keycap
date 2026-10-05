@@ -31,7 +31,15 @@ async function runOnce(): Promise<void> {
     functionName: "getSessionKeyInfo",
     args: [sessionKey.address],
   });
-  const [spendingLimit, spent, validUntil, revoked, granted] = info as unknown as [bigint, bigint, bigint, boolean, boolean];
+  // viem decodes a named struct return as an object keyed by its ABI component
+  // names, not a positional tuple/array.
+  const { spendingLimit, spent, validUntil, revoked, granted } = info as {
+    spendingLimit: bigint;
+    spent: bigint;
+    validUntil: bigint;
+    revoked: boolean;
+    granted: boolean;
+  };
 
   if (!granted || revoked) {
     console.log("[agent] session key not active (not granted or revoked) — nothing to do.");
