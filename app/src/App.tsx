@@ -5,6 +5,7 @@ import { createAccount, grantSessionKey, getSessionKeyInfo, getBalance, type Ses
 import { relayerAddress } from "./lib/relayer";
 import { CANDIDATE_TARGETS } from "./lib/contracts";
 import { loadWallet, saveWallet, type StoredWallet } from "./lib/storage";
+import { translatePolicyIntent } from "./lib/nlPolicy";
 import "./App.css";
 
 function formatMon(wei: bigint): string {
@@ -24,6 +25,9 @@ export default function App() {
   const [validHours, setValidHours] = useState("24");
   const [granting, setGranting] = useState(false);
   const [grantedInfo, setGrantedInfo] = useState<SessionKeyInfo | null>(null);
+
+  const [policyDescription, setPolicyDescription] = useState("");
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     setWallet(loadWallet());
@@ -56,6 +60,21 @@ export default function App() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleTranslate() {
+    if (!policyDescription.trim()) return;
+    setTranslating(true);
+    setError(null);
+    try {
+      const policy = await translatePolicyIntent(policyDescription);
+      setSpendLimit(String(policy.spendCapMon));
+      setValidHours(String(policy.validForHours));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTranslating(false);
     }
   }
 
@@ -115,6 +134,18 @@ export default function App() {
 
           <section className="card">
             <h2>2. Grant a session key to an agent</h2>
+            <label>
+              Describe the policy (optional — fills in the fields below)
+              <textarea
+                value={policyDescription}
+                onChange={(e) => setPolicyDescription(e.target.value)}
+                placeholder="e.g. let this agent spend up to 0.05 MON over the next day"
+                rows={2}
+              />
+            </label>
+            <button onClick={handleTranslate} disabled={translating || !policyDescription.trim()} type="button">
+              {translating ? "Translating…" : "Translate to policy"}
+            </button>
             <label>
               Agent address
               <input
