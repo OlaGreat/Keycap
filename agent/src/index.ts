@@ -1,5 +1,14 @@
 import "dotenv/config";
-import { createPublicClient, createWalletClient, http, encodeFunctionData, type Address, type Hex } from "viem";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  createPublicClient,
+  createWalletClient,
+  http,
+  encodeFunctionData,
+  type Address,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "./monad.js";
 import { hashCall } from "./callHash.js";
@@ -43,6 +52,17 @@ const sessionKey = privateKeyToAccount(SESSION_KEY_PRIVATE_KEY);
 
 const publicClient = createPublicClient({ chain: monadTestnet, transport: http() });
 const walletClient = createWalletClient({ account: sessionKey, chain: monadTestnet, transport: http() });
+
+function describeFailure(err: unknown): string {
+  if (err instanceof BaseError) {
+    const revert = err.walk((e) => e instanceof ContractFunctionRevertedError);
+    if (revert instanceof ContractFunctionRevertedError) {
+      return `rejected on-chain by policy: ${revert.reason ?? revert.shortMessage}`;
+    }
+    return `not submitted (infrastructure error, not a policy rejection): ${err.details || err.shortMessage}`;
+  }
+  return String(err);
+}
 
 async function attemptCall(target: Address, priceWei: bigint, reasoning: string): Promise<void> {
   const nonce = await publicClient.readContract({
@@ -140,12 +160,12 @@ async function runOnce(): Promise<void> {
     try {
       await attemptCall(target.address, candidate.priceWei, choice.reasoning);
     } catch (err) {
-      // The contract is the final arbiter of affordability: a later candidate
-      // in the ranking may no longer fit after earlier ones in this same run
-      // already spent part of the budget. That's expected, not a failure —
-      // skip it and keep going rather than aborting the whole run.
-      const message = err instanceof Error ? err.message : String(err);
-      console.log(`[agent] "${choice.id}" was not executable (likely exceeds remaining budget): ${message.split("\n")[0]}`);
+      // A later candidate may no longer fit after earlier ones in this same
+      // run spent part of the budget — expected, so skip it and keep going.
+      // But report the real cause: an on-chain policy rejection and an
+      // infrastructure failure (e.g. this key's gas wallet running dry) look
+      // nothing alike and must not be reported as the same thing.
+      console.log(`[agent] "${choice.id}" skipped — ${describeFailure(err)}`);
     }
   }
 }
