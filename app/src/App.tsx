@@ -1,15 +1,27 @@
 import { useEffect, useState } from "react";
-import type { Address } from "viem";
+import { isAddress, type Address } from "viem";
 import { createPasskey } from "./lib/webauthn";
 import { createAccount, grantSessionKey, getSessionKeyInfo, getBalance, type SessionKeyInfo } from "./lib/account";
 import { relayerAddress } from "./lib/relayer";
-import { CANDIDATE_TARGETS } from "./lib/contracts";
+import { CANDIDATE_TARGETS, REASONING_LOG_ADDRESS } from "./lib/contracts";
 import { loadWallet, saveWallet, type StoredWallet } from "./lib/storage";
 import { translatePolicyIntent } from "./lib/nlPolicy";
+import { pollRecentReasoning, type ReasoningEntry } from "./lib/activity";
 import "./App.css";
+
+const REASONING_POLL_MS = 5000;
 
 function formatMon(wei: bigint): string {
   return (Number(wei) / 1e18).toFixed(4);
+}
+
+function FaucetHint({ balance }: { balance: bigint | null }) {
+  if (balance !== 0n) return null;
+  return (
+    <a className="faucet-link" href="https://faucet.monad.xyz" target="_blank" rel="noreferrer">
+      fund via faucet →
+    </a>
+  );
 }
 
 export default function App() {
@@ -29,6 +41,8 @@ export default function App() {
   const [policyDescription, setPolicyDescription] = useState("");
   const [translating, setTranslating] = useState(false);
 
+  const [reasoningEntries, setReasoningEntries] = useState<ReasoningEntry[]>([]);
+
   useEffect(() => {
     setWallet(loadWallet());
   }, []);
@@ -41,6 +55,39 @@ export default function App() {
     if (!wallet) return;
     getBalance(wallet.accountAddress).then(setAccountBalance).catch(() => {});
   }, [wallet]);
+
+  // Live activity feed: polls the last ~100 blocks for this session key's
+  // on-chain reasoning entries. Works for any address typed into the field,
+  // not just one granted in this browser session — it's reading real chain
+  // state, not local app state.
+  useEffect(() => {
+    if (!isAddress(sessionKeyAddress)) {
+      setReasoningEntries([]);
+      return;
+    }
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const fresh = await pollRecentReasoning(REASONING_LOG_ADDRESS, sessionKeyAddress as Address);
+        if (cancelled) return;
+        setReasoningEntries((prev) => {
+          const byKey = new Map(prev.map((e) => [e.key, e]));
+          for (const entry of fresh) byKey.set(entry.key, entry);
+          return [...byKey.values()].sort((a, b) => Number(b.blockNumber - a.blockNumber)).slice(0, 20);
+        });
+      } catch {
+        // Transient RPC hiccups are fine to ignore on a poll loop.
+      }
+    }
+
+    poll();
+    const id = setInterval(poll, REASONING_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [sessionKeyAddress]);
 
   async function handleCreate() {
     setCreating(true);
@@ -104,16 +151,24 @@ export default function App() {
 
   return (
     <main className="page">
-      <h1>Keycap</h1>
-      <p className="tagline">Passkey-native smart account with on-chain, agent-scoped session keys.</p>
+      <header className="hero">
+        <h1>Keycap</h1>
+        <p className="tagline">Passkey-native smart account with on-chain, agent-scoped session keys.</p>
+      </header>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="error">
+          <strong>Error</strong>
+          <span>{error}</span>
+        </div>
+      )}
 
       {!wallet ? (
-        <section className="card">
-          <h2>1. Create your account</h2>
-          <p>No seed phrase — authenticate with your device's passkey (biometric/PIN).</p>
-          <button onClick={handleCreate} disabled={creating}>
+        <section className="card step">
+          <div className="step-label">Step 1</div>
+          <h2>Create your account</h2>
+          <p className="muted">No seed phrase, ever — authenticate with your device's passkey (biometric/PIN).</p>
+          <button className="primary" onClick={handleCreate} disabled={creating}>
             {creating ? "Creating…" : "Create Passkey Account"}
           </button>
         </section>
@@ -121,21 +176,19 @@ export default function App() {
         <>
           <section className="card">
             <h2>Account</h2>
-            <p className="mono">{wallet.accountAddress}</p>
-            <p>
-              Balance: {accountBalance !== null ? `${formatMon(accountBalance)} MON` : "…"}{" "}
-              {accountBalance === 0n && (
-                <a href="https://faucet.monad.xyz" target="_blank" rel="noreferrer">
-                  fund via faucet
-                </a>
-              )}
-            </p>
+            <p className="mono address">{wallet.accountAddress}</p>
+            <div className="stat-row">
+              <span className="stat-value">{accountBalance !== null ? `${formatMon(accountBalance)} MON` : "…"}</span>
+              <FaucetHint balance={accountBalance} />
+            </div>
           </section>
 
-          <section className="card">
-            <h2>2. Grant a session key to an agent</h2>
+          <section className="card step">
+            <div className="step-label">Step 2</div>
+            <h2>Grant a session key to an agent</h2>
+
             <label>
-              Describe the policy (optional — fills in the fields below)
+              Describe the policy <span className="optional">(optional — fills in the fields below)</span>
               <textarea
                 value={policyDescription}
                 onChange={(e) => setPolicyDescription(e.target.value)}
@@ -143,53 +196,85 @@ export default function App() {
                 rows={2}
               />
             </label>
-            <button onClick={handleTranslate} disabled={translating || !policyDescription.trim()} type="button">
+            <button className="secondary" onClick={handleTranslate} disabled={translating || !policyDescription.trim()} type="button">
               {translating ? "Translating…" : "Translate to policy"}
             </button>
-            <label>
-              Agent address
-              <input
-                value={sessionKeyAddress}
-                onChange={(e) => setSessionKeyAddress(e.target.value)}
-                placeholder="0x..."
-              />
-            </label>
-            <label>
-              Spend cap (MON)
-              <input value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} />
-            </label>
-            <label>
-              Valid for (hours)
-              <input value={validHours} onChange={(e) => setValidHours(e.target.value)} />
-            </label>
-            <button onClick={handleGrant} disabled={granting || !sessionKeyAddress}>
+
+            <div className="field-grid">
+              <label>
+                Agent address
+                <input
+                  className="mono"
+                  value={sessionKeyAddress}
+                  onChange={(e) => setSessionKeyAddress(e.target.value)}
+                  placeholder="0x…"
+                />
+              </label>
+              <label>
+                Spend cap (MON)
+                <input value={spendLimit} onChange={(e) => setSpendLimit(e.target.value)} />
+              </label>
+              <label>
+                Valid for (hours)
+                <input value={validHours} onChange={(e) => setValidHours(e.target.value)} />
+              </label>
+            </div>
+
+            <button className="primary" onClick={handleGrant} disabled={granting || !sessionKeyAddress}>
               {granting ? "Granting…" : "Grant Session Key"}
             </button>
 
             {grantedInfo && (
               <div className="info">
-                <p>Granted. Spend cap: {formatMon(grantedInfo.spendingLimit)} MON, spent so far: {formatMon(grantedInfo.spent)} MON</p>
-                <p>Valid until: {new Date(Number(grantedInfo.validUntil) * 1000).toLocaleString()}</p>
+                <p>
+                  Granted — spend cap <strong>{formatMon(grantedInfo.spendingLimit)} MON</strong>, spent so far{" "}
+                  <strong>{formatMon(grantedInfo.spent)} MON</strong>
+                </p>
+                <p className="muted">Valid until {new Date(Number(grantedInfo.validUntil) * 1000).toLocaleString()}</p>
               </div>
             )}
           </section>
+
+          {isAddress(sessionKeyAddress) && (
+            <section className="card step">
+              <div className="step-label">Step 3</div>
+              <h2>Agent activity</h2>
+              <p className="muted">
+                Live on-chain reasoning trail for this agent — every confirmed spend has an inspectable "why" attached to
+                it. Polls the last ~100 blocks every few seconds.
+              </p>
+              {reasoningEntries.length === 0 ? (
+                <p className="muted empty-state">No activity yet in the recent window — run the agent to see it here.</p>
+              ) : (
+                <ul className="activity-feed">
+                  {reasoningEntries.map((entry) => (
+                    <li key={entry.key} className="activity-entry">
+                      <p>{entry.reasoning}</p>
+                      <a
+                        className="mono tx-link"
+                        href={`https://testnet.monadscan.com/tx/${entry.txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        block {entry.blockNumber.toString()} · {entry.txHash.slice(0, 10)}…
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
         </>
       )}
 
       <section className="card relayer">
         <h3>Gas relayer (not your wallet)</h3>
-        <p>
-          Broadcasts transactions on your behalf — it never holds authority over your account, only pays gas.
-        </p>
-        <p className="mono">{relayerAddress}</p>
-        <p>
-          Balance: {relayerBalance !== null ? `${formatMon(relayerBalance)} MON` : "…"}{" "}
-          {relayerBalance === 0n && (
-            <a href="https://faucet.monad.xyz" target="_blank" rel="noreferrer">
-              fund via faucet
-            </a>
-          )}
-        </p>
+        <p className="muted">Broadcasts transactions on your behalf — it never holds authority over your account, only pays gas.</p>
+        <p className="mono address">{relayerAddress}</p>
+        <div className="stat-row">
+          <span className="stat-value">{relayerBalance !== null ? `${formatMon(relayerBalance)} MON` : "…"}</span>
+          <FaucetHint balance={relayerBalance} />
+        </div>
       </section>
     </main>
   );
