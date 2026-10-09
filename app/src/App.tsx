@@ -4,7 +4,7 @@ import { createPasskey } from "./lib/webauthn";
 import { createAccount, grantSessionKey, getSessionKeyInfo, getBalance, type SessionKeyInfo } from "./lib/account";
 import { relayerAddress } from "./lib/relayer";
 import { CANDIDATE_TARGETS, REASONING_LOG_ADDRESS } from "./lib/contracts";
-import { loadWallet, saveWallet, type StoredWallet } from "./lib/storage";
+import { loadAgentAddress, loadWallet, saveAgentAddress, saveWallet, type StoredWallet } from "./lib/storage";
 import { translatePolicyIntent } from "./lib/nlPolicy";
 import { pollRecentReasoning, type ReasoningEntry } from "./lib/activity";
 import "./App.css";
@@ -32,7 +32,7 @@ export default function App() {
   const [relayerBalance, setRelayerBalance] = useState<bigint | null>(null);
   const [accountBalance, setAccountBalance] = useState<bigint | null>(null);
 
-  const [sessionKeyAddress, setSessionKeyAddress] = useState("");
+  const [sessionKeyAddress, setSessionKeyAddress] = useState(loadAgentAddress);
   const [spendLimit, setSpendLimit] = useState("0.05");
   const [validHours, setValidHours] = useState("24");
   const [granting, setGranting] = useState(false);
@@ -65,6 +65,7 @@ export default function App() {
       setReasoningEntries([]);
       return;
     }
+    saveAgentAddress(sessionKeyAddress);
     let cancelled = false;
 
     async function poll() {

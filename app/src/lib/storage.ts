@@ -1,6 +1,7 @@
 import type { Address } from "viem";
 
 const KEY = "keycap.wallet";
+const AGENT_KEY = "keycap.agentAddress";
 
 export interface StoredWallet {
   credentialId: string;
@@ -21,4 +22,12 @@ export function loadWallet(): StoredWallet | null {
 
 export function saveWallet(wallet: StoredWallet): void {
   localStorage.setItem(KEY, JSON.stringify(wallet));
+}
+
+export function loadAgentAddress(): string {
+  return localStorage.getItem(AGENT_KEY) ?? "";
+}
+
+export function saveAgentAddress(address: string): void {
+  localStorage.setItem(AGENT_KEY, address);
 }
