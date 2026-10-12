@@ -1,6 +1,10 @@
 import type { Address } from "viem";
+import { FACTORY_ADDRESS } from "./contracts";
 
-const KEY = "keycap.wallet";
+// Scoped to the factory: accounts aren't upgradeable, so a contract change
+// ships as a new factory, and an account from an older one must not be
+// silently reused as if it had the new behavior.
+const KEY = `keycap.wallet.${FACTORY_ADDRESS}`;
 const AGENT_KEY = "keycap.agentAddress";
 
 export interface StoredWallet {
