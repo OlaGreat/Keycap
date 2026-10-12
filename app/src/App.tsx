@@ -9,10 +9,23 @@ import { translatePolicyIntent } from "./lib/nlPolicy";
 import { pollRecentReasoning, type ReasoningEntry } from "./lib/activity";
 import "./App.css";
 
-const REASONING_POLL_MS = 5000;
+const POLL_MS = 5000;
 
 function formatMon(wei: bigint): string {
   return (Number(wei) / 1e18).toFixed(4);
+}
+
+function budgetStatus(info: SessionKeyInfo): string {
+  if (!info.granted) return "Not granted";
+  if (info.revoked) return "Revoked";
+  const expiresAt = new Date(Number(info.validUntil) * 1000);
+  if (expiresAt.getTime() < Date.now()) return `Expired ${expiresAt.toLocaleString()}`;
+  return `Active until ${expiresAt.toLocaleString()}`;
+}
+
+function spentPercent(info: SessionKeyInfo): number {
+  if (info.spendingLimit === 0n) return 0;
+  return Math.min(100, Number((info.spent * 10000n) / info.spendingLimit) / 100);
 }
 
 function FaucetHint({ balance }: { balance: bigint | null }) {
@@ -36,7 +49,8 @@ export default function App() {
   const [spendLimit, setSpendLimit] = useState("0.05");
   const [validHours, setValidHours] = useState("24");
   const [granting, setGranting] = useState(false);
-  const [grantedInfo, setGrantedInfo] = useState<SessionKeyInfo | null>(null);
+  const [justGranted, setJustGranted] = useState(false);
+  const [sessionKeyInfo, setSessionKeyInfo] = useState<SessionKeyInfo | null>(null);
 
   const [policyDescription, setPolicyDescription] = useState("");
   const [translating, setTranslating] = useState(false);
@@ -52,14 +66,36 @@ export default function App() {
     setWallet(loadWallet());
   }, []);
 
+  // Balances and the session key's budget are polled rather than loaded once:
+  // the agent spends from a separate process, so a one-time read goes stale
+  // the moment it acts.
   useEffect(() => {
-    getBalance(relayerAddress).then(setRelayerBalance).catch(() => {});
-  }, []);
+    let cancelled = false;
+    const agent = isAddress(sessionKeyAddress) ? (sessionKeyAddress as Address) : null;
 
-  useEffect(() => {
-    if (!wallet) return;
-    getBalance(wallet.accountAddress).then(setAccountBalance).catch(() => {});
-  }, [wallet]);
+    async function refresh() {
+      try {
+        const [relayer, account, info] = await Promise.all([
+          getBalance(relayerAddress),
+          wallet ? getBalance(wallet.accountAddress) : Promise.resolve(null),
+          wallet && agent ? getSessionKeyInfo(wallet.accountAddress, agent) : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setRelayerBalance(relayer);
+        setAccountBalance(account);
+        setSessionKeyInfo(info);
+      } catch {
+        // Transient RPC hiccups are fine to ignore on a poll loop.
+      }
+    }
+
+    refresh();
+    const id = setInterval(refresh, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [wallet, sessionKeyAddress]);
 
   // Live activity feed: polls the last ~100 blocks for this session key's
   // on-chain reasoning entries. Works for any address typed into the field,
@@ -88,7 +124,7 @@ export default function App() {
     }
 
     poll();
-    const id = setInterval(poll, REASONING_POLL_MS);
+    const id = setInterval(poll, POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -135,6 +171,7 @@ export default function App() {
   async function handleGrant() {
     if (!wallet) return;
     setGranting(true);
+    setJustGranted(false);
     setError(null);
     try {
       const spendLimitWei = BigInt(Math.round(parseFloat(spendLimit) * 1e18));
@@ -148,7 +185,8 @@ export default function App() {
         validUntil,
       );
       const info = await getSessionKeyInfo(wallet.accountAddress, sessionKeyAddress as Address);
-      setGrantedInfo(info);
+      setSessionKeyInfo(info);
+      setJustGranted(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -236,13 +274,9 @@ export default function App() {
               {granting ? "Granting…" : "Grant Session Key"}
             </button>
 
-            {grantedInfo && (
+            {justGranted && (
               <div className="info">
-                <p>
-                  Granted — spend cap <strong>{formatMon(grantedInfo.spendingLimit)} MON</strong>, spent so far{" "}
-                  <strong>{formatMon(grantedInfo.spent)} MON</strong>
-                </p>
-                <p className="muted">Valid until {new Date(Number(grantedInfo.validUntil) * 1000).toLocaleString()}</p>
+                <p>Session key granted. Its live budget is shown under Agent activity below.</p>
               </div>
             )}
           </section>
@@ -255,6 +289,23 @@ export default function App() {
                 Live on-chain reasoning trail for this agent — every confirmed spend has an inspectable "why" attached to
                 it. Polls the last ~100 blocks every few seconds.
               </p>
+              {sessionKeyInfo && (
+                <div className="budget">
+                  <div className="budget-row">
+                    <span>
+                      <strong>{formatMon(sessionKeyInfo.spent)}</strong> of {formatMon(sessionKeyInfo.spendingLimit)} MON
+                      spent
+                    </span>
+                    <span className="muted">
+                      {formatMon(sessionKeyInfo.spendingLimit - sessionKeyInfo.spent)} MON left
+                    </span>
+                  </div>
+                  <div className="budget-bar">
+                    <div className="budget-fill" style={{ width: `${spentPercent(sessionKeyInfo)}%` }} />
+                  </div>
+                  <p className="muted budget-status">{budgetStatus(sessionKeyInfo)}</p>
+                </div>
+              )}
               {reasoningEntries.length === 0 ? (
                 <p className="muted empty-state">No activity yet in the recent window — run the agent to see it here.</p>
               ) : (

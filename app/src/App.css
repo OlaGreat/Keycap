@@ -241,6 +241,41 @@ button.secondary {
   letter-spacing: 0.04em;
 }
 
+.budget {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 0.9rem;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.9rem;
+}
+
+.budget-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.55rem;
+}
+
+.budget-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+
+.budget-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.budget-status {
+  margin: 0.55rem 0 0;
+  font-size: 0.8rem;
+}
+
 .stale-hint {
   margin: -0.4rem 0 0.9rem;
   font-size: 0.82rem;
