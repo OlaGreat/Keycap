@@ -52,6 +52,10 @@ abstract contract SessionKeyManager is ISessionKeyManager {
         delete _targetLists[sessionKey];
 
         for (uint256 i = 0; i < allowedTargets.length; i++) {
+            // The account's admin functions (grant/revoke) are gated only by
+            // msg.sender == address(this), which an allowlisted self-call would
+            // satisfy — letting a session key re-grant itself any cap.
+            require(allowedTargets[i] != address(this), "SessionKeyManager: self target");
             _allowedTargets[sessionKey][allowedTargets[i]] = true;
             _targetLists[sessionKey].push(allowedTargets[i]);
         }

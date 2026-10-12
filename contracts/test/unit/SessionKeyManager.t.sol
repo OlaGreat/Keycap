@@ -50,6 +50,13 @@ contract SessionKeyManagerTest is Test {
         assertFalse(manager.isTargetAllowed(SESSION_KEY, OTHER_TARGET));
     }
 
+    function test_grantSessionKey_RevertsWhenTargetIsSelf() public {
+        address[] memory targets = new address[](1);
+        targets[0] = address(manager);
+        vm.expectRevert(bytes("SessionKeyManager: self target"));
+        manager.grantSessionKey(SESSION_KEY, targets, 1 ether, uint64(block.timestamp + 1 days));
+    }
+
     function test_grantSessionKey_RevertsOnZeroAddress() public {
         vm.expectRevert();
         manager.grantSessionKey(address(0), _allowedTargets(), 1 ether, uint64(block.timestamp + 1 days));

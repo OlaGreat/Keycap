@@ -134,6 +134,26 @@ contract PasskeyAccountSessionKeysTest is Test {
         account.execute(call, _sessionAuth(sessionKey, sessionKeyPk, call, 0));
     }
 
+    /// @dev If the account itself could be allowlisted, a session key could
+    ///      call grantSessionKey through execute() (msg.sender == account
+    ///      passes the self-call check) and grant itself any permissions.
+    function test_grantSessionKey_AccountItselfAsTarget_Reverts() public {
+        WebAuthn.WebAuthnAuth memory dummy;
+        address[] memory selfTarget = new address[](1);
+        selfTarget[0] = address(account);
+        Call memory grantCall = Call({
+            target: address(account),
+            value: 0,
+            data: abi.encodeCall(account.grantSessionKey, (sessionKey, selfTarget, 1 ether, uint64(block.timestamp + 1 days)))
+        });
+        Authorization memory ownerAuth =
+            Authorization({authType: AuthType.OWNER_PASSKEY, nonce: account.getOwnerNonce(), signer: address(0), signature: abi.encode(dummy)});
+
+        vm.expectRevert(bytes("PasskeyAccount: call reverted"));
+        account.execute(grantCall, ownerAuth);
+        assertFalse(account.isTargetAllowed(sessionKey, address(account)));
+    }
+
     function test_execute_SessionKey_WrongSigner_Reverts() public {
         uint256 otherPk = 0xB0B;
         Call memory call = Call({target: address(target), value: 0.1 ether, data: abi.encodeCall(MockTarget.ping, (7))});
