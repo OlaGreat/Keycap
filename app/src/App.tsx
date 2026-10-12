@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { isAddress, type Address } from "viem";
 import { createPasskey } from "./lib/webauthn";
-import { createAccount, grantSessionKey, getSessionKeyInfo, getBalance, type SessionKeyInfo } from "./lib/account";
+import {
+  createAccount,
+  grantSessionKey,
+  revokeSessionKey,
+  getSessionKeyInfo,
+  getBalance,
+  type SessionKeyInfo,
+} from "./lib/account";
 import { relayerAddress } from "./lib/relayer";
 import { CANDIDATE_TARGETS, REASONING_LOG_ADDRESS } from "./lib/contracts";
 import { loadAgentAddress, loadWallet, saveAgentAddress, saveWallet, type StoredWallet } from "./lib/storage";
@@ -21,6 +28,10 @@ function budgetStatus(info: SessionKeyInfo): string {
   const expiresAt = new Date(Number(info.validUntil) * 1000);
   if (expiresAt.getTime() < Date.now()) return `Expired ${expiresAt.toLocaleString()}`;
   return `Active until ${expiresAt.toLocaleString()}`;
+}
+
+function isActive(info: SessionKeyInfo): boolean {
+  return info.granted && !info.revoked && Number(info.validUntil) * 1000 >= Date.now();
 }
 
 function spentPercent(info: SessionKeyInfo): number {
@@ -50,6 +61,7 @@ export default function App() {
   const [validHours, setValidHours] = useState("24");
   const [granting, setGranting] = useState(false);
   const [justGranted, setJustGranted] = useState(false);
+  const [revoking, setRevoking] = useState(false);
   const [sessionKeyInfo, setSessionKeyInfo] = useState<SessionKeyInfo | null>(null);
 
   const [policyDescription, setPolicyDescription] = useState("");
@@ -194,6 +206,21 @@ export default function App() {
     }
   }
 
+  async function handleRevoke() {
+    if (!wallet || !isAddress(sessionKeyAddress)) return;
+    setRevoking(true);
+    setError(null);
+    try {
+      await revokeSessionKey(wallet.accountAddress, wallet.credentialId, sessionKeyAddress as Address);
+      setSessionKeyInfo(await getSessionKeyInfo(wallet.accountAddress, sessionKeyAddress as Address));
+      setJustGranted(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRevoking(false);
+    }
+  }
+
   return (
     <main className="page">
       <header className="hero">
@@ -304,6 +331,11 @@ export default function App() {
                     <div className="budget-fill" style={{ width: `${spentPercent(sessionKeyInfo)}%` }} />
                   </div>
                   <p className="muted budget-status">{budgetStatus(sessionKeyInfo)}</p>
+                  {isActive(sessionKeyInfo) && (
+                    <button className="danger" onClick={handleRevoke} disabled={revoking}>
+                      {revoking ? "Revoking…" : "Revoke agent access"}
+                    </button>
+                  )}
                 </div>
               )}
               {reasoningEntries.length === 0 ? (

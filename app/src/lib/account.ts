@@ -96,6 +96,16 @@ export async function grantSessionKey(
   return executeAsOwner(account, credentialId, { target: account, value: 0n, data });
 }
 
+export async function revokeSessionKey(account: Address, credentialId: string, sessionKey: Address): Promise<Hex> {
+  const data = encodeFunctionData({
+    abi: PasskeyAccountAbi,
+    functionName: "revokeSessionKey",
+    args: [sessionKey],
+  });
+
+  return executeAsOwner(account, credentialId, { target: account, value: 0n, data });
+}
+
 export interface SessionKeyInfo {
   spendingLimit: bigint;
   spent: bigint;

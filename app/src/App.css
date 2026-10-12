@@ -221,6 +221,18 @@ button.secondary {
   background: transparent;
 }
 
+button.danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+  margin: 0.75rem 0 0;
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+}
+
 .error {
   display: flex;
   flex-direction: column;
