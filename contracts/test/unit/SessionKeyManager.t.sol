@@ -38,6 +38,18 @@ contract SessionKeyManagerTest is Test {
         assertFalse(manager.isTargetAllowed(SESSION_KEY, OTHER_TARGET));
     }
 
+    function test_grantSessionKey_RegrantWithNarrowerTargets_RemovesDroppedTargets() public {
+        address[] memory both = new address[](2);
+        both[0] = TARGET;
+        both[1] = OTHER_TARGET;
+        manager.grantSessionKey(SESSION_KEY, both, 1 ether, uint64(block.timestamp + 1 days));
+
+        manager.grantSessionKey(SESSION_KEY, _allowedTargets(), 1 ether, uint64(block.timestamp + 1 days));
+
+        assertTrue(manager.isTargetAllowed(SESSION_KEY, TARGET));
+        assertFalse(manager.isTargetAllowed(SESSION_KEY, OTHER_TARGET));
+    }
+
     function test_grantSessionKey_RevertsOnZeroAddress() public {
         vm.expectRevert();
         manager.grantSessionKey(address(0), _allowedTargets(), 1 ether, uint64(block.timestamp + 1 days));

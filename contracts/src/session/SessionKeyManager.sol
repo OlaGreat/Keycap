@@ -14,6 +14,10 @@ import {ISessionKeyManager, SessionKeyPermissions} from "../interfaces/ISessionK
 abstract contract SessionKeyManager is ISessionKeyManager {
     mapping(address sessionKey => SessionKeyPermissions) private _sessionKeys;
     mapping(address sessionKey => mapping(address target => bool)) private _allowedTargets;
+    // Mappings can't be iterated, so each key's current target list is kept
+    // alongside the allowlist — a re-grant needs it to clear targets that the
+    // new grant drops, otherwise narrowing permissions would silently fail.
+    mapping(address sessionKey => address[] targets) private _targetLists;
 
     function isTargetAllowed(address sessionKey, address target) public view returns (bool) {
         return _allowedTargets[sessionKey][target];
@@ -41,8 +45,15 @@ abstract contract SessionKeyManager is ISessionKeyManager {
             granted: true
         });
 
+        address[] storage previous = _targetLists[sessionKey];
+        for (uint256 i = 0; i < previous.length; i++) {
+            _allowedTargets[sessionKey][previous[i]] = false;
+        }
+        delete _targetLists[sessionKey];
+
         for (uint256 i = 0; i < allowedTargets.length; i++) {
             _allowedTargets[sessionKey][allowedTargets[i]] = true;
+            _targetLists[sessionKey].push(allowedTargets[i]);
         }
 
         emit SessionKeyGranted(sessionKey, spendingLimit, validUntil);

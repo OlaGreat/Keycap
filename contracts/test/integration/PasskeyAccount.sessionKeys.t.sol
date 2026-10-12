@@ -113,6 +113,27 @@ contract PasskeyAccountSessionKeysTest is Test {
         account.execute(call3, _sessionAuth(sessionKey, sessionKeyPk, call3, 2));
     }
 
+    function test_execute_SessionKey_TargetDroppedByRegrant_Reverts() public {
+        // setUp granted `target` only; widen to both, then narrow back to `target`.
+        WebAuthn.WebAuthnAuth memory dummy;
+        address[] memory both = new address[](2);
+        both[0] = address(target);
+        both[1] = address(otherTarget);
+        account.execute(
+            Call({
+                target: address(account),
+                value: 0,
+                data: abi.encodeCall(account.grantSessionKey, (sessionKey, both, 1 ether, uint64(block.timestamp + 1 days)))
+            }),
+            Authorization({authType: AuthType.OWNER_PASSKEY, nonce: account.getOwnerNonce(), signer: address(0), signature: abi.encode(dummy)})
+        );
+        _grantSessionKey(sessionKey, address(target), 1 ether, uint64(block.timestamp + 1 days));
+
+        Call memory call = Call({target: address(otherTarget), value: 0.1 ether, data: abi.encodeCall(MockTarget.ping, (7))});
+        vm.expectRevert(bytes("PasskeyAccount: target not allowed"));
+        account.execute(call, _sessionAuth(sessionKey, sessionKeyPk, call, 0));
+    }
+
     function test_execute_SessionKey_WrongSigner_Reverts() public {
         uint256 otherPk = 0xB0B;
         Call memory call = Call({target: address(target), value: 0.1 ether, data: abi.encodeCall(MockTarget.ping, (7))});
