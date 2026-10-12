@@ -6,11 +6,13 @@ import {
   grantSessionKey,
   revokeSessionKey,
   getSessionKeyInfo,
+  getAllowedTargets,
+  getPricePerCall,
   getBalance,
   type SessionKeyInfo,
 } from "./lib/account";
 import { relayerAddress } from "./lib/relayer";
-import { CANDIDATE_TARGETS, REASONING_LOG_ADDRESS } from "./lib/contracts";
+import { CANDIDATE_TARGETS, REASONING_LOG_ADDRESS, TARGET_LABELS } from "./lib/contracts";
 import { loadAgentAddress, loadWallet, saveAgentAddress, saveWallet, type StoredWallet } from "./lib/storage";
 import { translatePolicyIntent } from "./lib/nlPolicy";
 import { pollRecentReasoning, type ReasoningEntry } from "./lib/activity";
@@ -63,6 +65,9 @@ export default function App() {
   const [justGranted, setJustGranted] = useState(false);
   const [revoking, setRevoking] = useState(false);
   const [sessionKeyInfo, setSessionKeyInfo] = useState<SessionKeyInfo | null>(null);
+  const [selectedTargets, setSelectedTargets] = useState<Address[]>([...CANDIDATE_TARGETS]);
+  const [allowedTargets, setAllowedTargets] = useState<Address[] | null>(null);
+  const [prices, setPrices] = useState<Record<string, bigint>>({});
 
   const [policyDescription, setPolicyDescription] = useState("");
   const [translating, setTranslating] = useState(false);
@@ -78,6 +83,12 @@ export default function App() {
     setWallet(loadWallet());
   }, []);
 
+  useEffect(() => {
+    Promise.all(CANDIDATE_TARGETS.map((t) => getPricePerCall(t)))
+      .then((values) => setPrices(Object.fromEntries(CANDIDATE_TARGETS.map((t, i) => [t, values[i]]))))
+      .catch(() => {});
+  }, []);
+
   // Balances and the session key's budget are polled rather than loaded once:
   // the agent spends from a separate process, so a one-time read goes stale
   // the moment it acts.
@@ -87,15 +98,17 @@ export default function App() {
 
     async function refresh() {
       try {
-        const [relayer, account, info] = await Promise.all([
+        const [relayer, account, info, allowed] = await Promise.all([
           getBalance(relayerAddress),
           wallet ? getBalance(wallet.accountAddress) : Promise.resolve(null),
           wallet && agent ? getSessionKeyInfo(wallet.accountAddress, agent) : Promise.resolve(null),
+          wallet && agent ? getAllowedTargets(wallet.accountAddress, agent, CANDIDATE_TARGETS) : Promise.resolve(null),
         ]);
         if (cancelled) return;
         setRelayerBalance(relayer);
         setAccountBalance(account);
         setSessionKeyInfo(info);
+        setAllowedTargets(allowed);
       } catch {
         // Transient RPC hiccups are fine to ignore on a poll loop.
       }
@@ -192,7 +205,7 @@ export default function App() {
         wallet.accountAddress,
         wallet.credentialId,
         sessionKeyAddress as Address,
-        CANDIDATE_TARGETS,
+        CANDIDATE_TARGETS.filter((t) => selectedTargets.includes(t)),
         spendLimitWei,
         validUntil,
       );
@@ -204,6 +217,10 @@ export default function App() {
     } finally {
       setGranting(false);
     }
+  }
+
+  function toggleTarget(target: Address) {
+    setSelectedTargets((prev) => (prev.includes(target) ? prev.filter((t) => t !== target) : [...prev, target]));
   }
 
   async function handleRevoke() {
@@ -297,7 +314,26 @@ export default function App() {
               </label>
             </div>
 
-            <button className="primary" onClick={handleGrant} disabled={granting || !sessionKeyAddress}>
+            <fieldset className="targets">
+              <legend>Services this agent may pay</legend>
+              {CANDIDATE_TARGETS.map((target) => (
+                <label key={target} className="target-option">
+                  <input
+                    type="checkbox"
+                    checked={selectedTargets.includes(target)}
+                    onChange={() => toggleTarget(target)}
+                  />
+                  <span>{TARGET_LABELS[target]}</span>
+                  {prices[target] !== undefined && <span className="muted">{formatMon(prices[target])} MON/call</span>}
+                </label>
+              ))}
+            </fieldset>
+
+            <button
+              className="primary"
+              onClick={handleGrant}
+              disabled={granting || !sessionKeyAddress || selectedTargets.length === 0}
+            >
               {granting ? "Granting…" : "Grant Session Key"}
             </button>
 
@@ -331,6 +367,15 @@ export default function App() {
                     <div className="budget-fill" style={{ width: `${spentPercent(sessionKeyInfo)}%` }} />
                   </div>
                   <p className="muted budget-status">{budgetStatus(sessionKeyInfo)}</p>
+                  {allowedTargets && sessionKeyInfo.granted && (
+                    <div className="target-chips">
+                      {CANDIDATE_TARGETS.map((target) => (
+                        <span key={target} className={allowedTargets.includes(target) ? "chip allowed" : "chip"}>
+                          {allowedTargets.includes(target) ? "✓" : "✕"} {TARGET_LABELS[target]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {isActive(sessionKeyInfo) && (
                     <button className="danger" onClick={handleRevoke} disabled={revoking}>
                       {revoking ? "Revoking…" : "Revoke agent access"}

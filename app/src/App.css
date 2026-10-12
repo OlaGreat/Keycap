@@ -288,6 +288,58 @@ button.danger:hover:not(:disabled) {
   font-size: 0.8rem;
 }
 
+.targets {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem 0.3rem;
+  margin: 0 0 1rem;
+}
+
+.targets legend {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0 0.3rem;
+}
+
+label.target-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.target-option input {
+  width: auto;
+  margin: 0;
+}
+
+.target-option .muted {
+  margin-left: auto;
+  font-size: 0.82rem;
+}
+
+.target-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.chip {
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  color: var(--text-muted);
+}
+
+.chip.allowed {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 .stale-hint {
   margin: -0.4rem 0 0.9rem;
   font-size: 0.82rem;

@@ -2,7 +2,7 @@ import { encodeAbiParameters, encodeFunctionData, type Address, type Hex } from 
 import { hashCall, type Call } from "./callHash";
 import { signWithPasskey, type WebAuthnAuth } from "./webauthn";
 import { publicClient, relayerWalletClient } from "./relayer";
-import { FACTORY_ADDRESS, PasskeyAccountFactoryAbi, PasskeyAccountAbi } from "./contracts";
+import { FACTORY_ADDRESS, PasskeyAccountFactoryAbi, PasskeyAccountAbi, PaidAPIAbi } from "./contracts";
 import { monadTestnet } from "./monad";
 
 const webAuthnAuthTupleType = {
@@ -122,6 +122,25 @@ export async function getSessionKeyInfo(account: Address, sessionKey: Address): 
     args: [sessionKey],
   });
   return info as unknown as SessionKeyInfo;
+}
+
+/** Which of `targets` this session key may currently call, read from chain. */
+export async function getAllowedTargets(account: Address, sessionKey: Address, targets: Address[]): Promise<Address[]> {
+  const allowed = await Promise.all(
+    targets.map((target) =>
+      publicClient.readContract({
+        address: account,
+        abi: PasskeyAccountAbi,
+        functionName: "isTargetAllowed",
+        args: [sessionKey, target],
+      }),
+    ),
+  );
+  return targets.filter((_, i) => allowed[i]);
+}
+
+export async function getPricePerCall(target: Address): Promise<bigint> {
+  return publicClient.readContract({ address: target, abi: PaidAPIAbi, functionName: "pricePerCall" });
 }
 
 export async function getBalance(address: Address): Promise<bigint> {
