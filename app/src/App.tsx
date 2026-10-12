@@ -212,7 +212,7 @@ export default function App() {
         <section className="card step">
           <div className="step-label">Step 1</div>
           <h2>Create your account</h2>
-          <p className="muted">No seed phrase, ever — authenticate with your device's passkey (biometric/PIN).</p>
+          <p className="muted">No seed phrase, ever. Authenticate with your device's passkey (biometric/PIN).</p>
           <button className="primary" onClick={handleCreate} disabled={creating}>
             {creating ? "Creating…" : "Create Passkey Account"}
           </button>
@@ -233,7 +233,7 @@ export default function App() {
             <h2>Grant a session key to an agent</h2>
 
             <label>
-              Describe the policy <span className="optional">(optional — fills in the fields below)</span>
+              Describe the policy <span className="optional">(optional, fills in the fields below)</span>
               <textarea
                 value={policyDescription}
                 onChange={(e) => setPolicyDescription(e.target.value)}
@@ -286,7 +286,7 @@ export default function App() {
               <div className="step-label">Step 3</div>
               <h2>Agent activity</h2>
               <p className="muted">
-                Live on-chain reasoning trail for this agent — every confirmed spend has an inspectable "why" attached to
+                Live on-chain reasoning trail for this agent. Every confirmed spend has an inspectable "why" attached to
                 it. Polls the last ~100 blocks every few seconds.
               </p>
               {sessionKeyInfo && (
@@ -307,7 +307,7 @@ export default function App() {
                 </div>
               )}
               {reasoningEntries.length === 0 ? (
-                <p className="muted empty-state">No activity yet in the recent window — run the agent to see it here.</p>
+                <p className="muted empty-state">No activity yet in the recent window. Run the agent to see it here.</p>
               ) : (
                 <ul className="activity-feed">
                   {reasoningEntries.map((entry) => (
@@ -332,7 +332,7 @@ export default function App() {
 
       <section className="card relayer">
         <h3>Gas relayer (not your wallet)</h3>
-        <p className="muted">Broadcasts transactions on your behalf — it never holds authority over your account, only pays gas.</p>
+        <p className="muted">Broadcasts transactions on your behalf. It never holds authority over your account, only pays gas.</p>
         <p className="mono address">{relayerAddress}</p>
         <div className="stat-row">
           <span className="stat-value">{relayerBalance !== null ? `${formatMon(relayerBalance)} MON` : "…"}</span>
