@@ -340,6 +340,10 @@ label.target-option {
   color: var(--accent-strong);
 }
 
+.translator-note {
+  margin: 0 0 1rem;
+}
+
 .stale-hint {
   margin: -0.4rem 0 0.9rem;
   font-size: 0.82rem;

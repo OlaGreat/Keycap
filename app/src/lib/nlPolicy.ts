@@ -34,8 +34,23 @@ function nearlyEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
+const OLLAMA_BASE_URL = import.meta.env?.VITE_OLLAMA_BASE_URL ?? "http://localhost:11434";
+
+/**
+ * Translation needs a model running on the viewer's own machine, so it isn't
+ * available to someone opening a hosted copy of the app; the UI hides it then.
+ */
+export async function isTranslatorAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch(`${OLLAMA_BASE_URL}/api/version`, { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function readWithModel(description: string): Promise<ParsedPolicy> {
-  const baseUrl = import.meta.env?.VITE_OLLAMA_BASE_URL ?? "http://localhost:11434";
+  const baseUrl = OLLAMA_BASE_URL;
   const model = import.meta.env?.VITE_OLLAMA_MODEL ?? "qwen2.5:3b";
 
   const res = await fetch(`${baseUrl}/api/chat`, {

@@ -14,7 +14,7 @@ import {
 import { relayerAddress } from "./lib/relayer";
 import { CANDIDATE_TARGETS, REASONING_LOG_ADDRESS, TARGET_LABELS } from "./lib/contracts";
 import { loadAgentAddress, loadWallet, saveAgentAddress, saveWallet, type StoredWallet } from "./lib/storage";
-import { translatePolicyIntent } from "./lib/nlPolicy";
+import { isTranslatorAvailable, translatePolicyIntent } from "./lib/nlPolicy";
 import { pollRecentReasoning, type ReasoningEntry } from "./lib/activity";
 import "./App.css";
 
@@ -69,6 +69,7 @@ export default function App() {
   const [allowedTargets, setAllowedTargets] = useState<Address[] | null>(null);
   const [prices, setPrices] = useState<Record<string, bigint>>({});
 
+  const [translatorAvailable, setTranslatorAvailable] = useState<boolean | null>(null);
   const [policyDescription, setPolicyDescription] = useState("");
   const [translating, setTranslating] = useState(false);
   const [translatedDescription, setTranslatedDescription] = useState<string | null>(null);
@@ -81,6 +82,7 @@ export default function App() {
 
   useEffect(() => {
     setWallet(loadWallet());
+    isTranslatorAvailable().then(setTranslatorAvailable);
   }, []);
 
   useEffect(() => {
@@ -278,22 +280,38 @@ export default function App() {
             <div className="step-label">Step 2</div>
             <h2>Grant a session key to an agent</h2>
 
-            <label>
-              Describe the policy <span className="optional">(optional, fills in the fields below)</span>
-              <textarea
-                value={policyDescription}
-                onChange={(e) => setPolicyDescription(e.target.value)}
-                placeholder="e.g. let this agent spend up to 0.05 MON over the next day"
-                rows={2}
-              />
-            </label>
-            <button className="secondary" onClick={handleTranslate} disabled={translating || !policyDescription.trim()} type="button">
-              {translating ? "Translating…" : "Translate to policy"}
-            </button>
-            {fieldsStale && !translating && (
-              <p className="stale-hint">
-                The fields below don't reflect this description yet. Click Translate to policy.
-              </p>
+            {translatorAvailable ? (
+              <>
+                <label>
+                  Describe the policy <span className="optional">(optional, fills in the fields below)</span>
+                  <textarea
+                    value={policyDescription}
+                    onChange={(e) => setPolicyDescription(e.target.value)}
+                    placeholder="e.g. let this agent spend up to 0.05 MON over the next day"
+                    rows={2}
+                  />
+                </label>
+                <button
+                  className="secondary"
+                  onClick={handleTranslate}
+                  disabled={translating || !policyDescription.trim()}
+                  type="button"
+                >
+                  {translating ? "Translating…" : "Translate to policy"}
+                </button>
+                {fieldsStale && !translating && (
+                  <p className="stale-hint">
+                    The fields below don't reflect this description yet. Click Translate to policy.
+                  </p>
+                )}
+              </>
+            ) : (
+              translatorAvailable === false && (
+                <p className="muted translator-note">
+                  Plain-English policy translation runs on a local AI model, which isn't available here. Fill in the
+                  fields below directly.
+                </p>
+              )
             )}
 
             <div className="field-grid">
