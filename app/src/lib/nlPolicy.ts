@@ -7,7 +7,7 @@ import { parsePolicy, toHours, type ParsedPolicy } from "./policyParse";
 const ModelReadingSchema = z.object({
   spendCapMon: z.number().positive(),
   duration: z.number().positive(),
-  durationUnit: z.enum(["minutes", "hours", "days", "weeks"]),
+  durationUnit: z.enum(["seconds", "minutes", "hours", "days", "weeks"]),
 });
 
 export type PolicyIntent = ParsedPolicy;
@@ -16,15 +16,16 @@ const SYSTEM_PROMPT =
   "You extract a spending policy from a plain-English description. The spend cap is the amount " +
   "of money: any number in the text that is NOT attached to a time unit is the spend cap, in MON, even if " +
   "the word MON is missing. Report the duration EXACTLY as the user wrote it: the number, and its unit as " +
-  "one of minutes, hours, days, weeks. Do NOT convert between units. Only if the text contains no amount " +
+  "one of seconds, minutes, hours, days, weeks. Do NOT convert between units. Only if the text contains no amount " +
   "at all use 0.05; only if it contains no duration at all use 24 hours.\n" +
   "Examples:\n" +
   '"spend at most 0.004 for 20 minutes" -> {"spendCapMon": 0.004, "duration": 20, "durationUnit": "minutes"}\n' +
+  '"0.01 for 90 sec" -> {"spendCapMon": 0.01, "duration": 90, "durationUnit": "seconds"}\n' +
   '"0.3 mon, 2 hrs" -> {"spendCapMon": 0.3, "duration": 2, "durationUnit": "hours"}\n' +
   '"half an hour, up to 0.02" -> {"spendCapMon": 0.02, "duration": 30, "durationUnit": "minutes"}\n' +
   '"0.1 for a week" -> {"spendCapMon": 0.1, "duration": 1, "durationUnit": "weeks"}\n' +
   '"let it spend 0.08" -> {"spendCapMon": 0.08, "duration": 24, "durationUnit": "hours"}\n' +
-  'Respond with strict JSON only: {"spendCapMon": number, "duration": number, "durationUnit": "minutes"|"hours"|"days"|"weeks"}.';
+  'Respond with strict JSON only: {"spendCapMon": number, "duration": number, "durationUnit": "seconds"|"minutes"|"hours"|"days"|"weeks"}.';
 
 const NOT_CONFIDENT =
   "Couldn't translate that confidently. Rephrase it (for example \"0.05 MON for 2 hours\") or fill in the fields directly.";

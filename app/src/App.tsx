@@ -184,7 +184,9 @@ export default function App() {
     try {
       const policy = await translatePolicyIntent(policyDescription);
       setSpendLimit(String(policy.spendCapMon));
-      setValidHours(String(policy.validForHours));
+      // Short durations are fractional hours (20 min = 0.333…); 4 decimals
+      // keeps the field readable at well under a second of drift.
+      setValidHours(String(Number(policy.validForHours.toFixed(4))));
       setTranslatedDescription(policyDescription);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

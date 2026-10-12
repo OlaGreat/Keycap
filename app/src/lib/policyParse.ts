@@ -7,6 +7,7 @@ export const DEFAULT_CAP_MON = 0.05;
 export const DEFAULT_HOURS = 24;
 
 const UNIT_HOURS: Record<string, number> = {
+  second: 1 / 3600,
   minute: 1 / 60,
   hour: 1,
   day: 24,
@@ -16,6 +17,7 @@ const UNIT_HOURS: Record<string, number> = {
 /** Maps a unit as written ("mins", "hrs", "days"…) to a canonical unit, or null. */
 export function canonicalUnit(raw: string): keyof typeof UNIT_HOURS | null {
   const u = raw.toLowerCase();
+  if (/^(seconds?|secs?)$/.test(u)) return "second";
   if (/^(minutes?|mins?)$/.test(u)) return "minute";
   if (/^(hours?|hrs?)$/.test(u)) return "hour";
   if (/^days?$/.test(u)) return "day";
@@ -28,7 +30,7 @@ export function toHours(amount: number, unit: string): number | null {
   return canonical === null ? null : amount * UNIT_HOURS[canonical];
 }
 
-const NUMERIC_DURATION = /(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?|days?|weeks?|wks?)\b/i;
+const NUMERIC_DURATION = /(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?|weeks?|wks?)\b/i;
 
 const WORD_DURATIONS: [RegExp, number][] = [
   [/\bhalf (an )?hour\b/i, 0.5],
