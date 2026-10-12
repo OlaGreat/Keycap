@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start:force": "tsx src/index.ts --ignore-local-checks"
   },
   "license": "MIT",
   "dependencies": {

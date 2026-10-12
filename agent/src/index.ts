@@ -27,6 +27,10 @@ const ACCOUNT_ADDRESS = requireEnv("ACCOUNT_ADDRESS") as Address;
 const SESSION_KEY_PRIVATE_KEY = requireEnv("SESSION_KEY_PRIVATE_KEY") as Hex;
 const REASONING_LOG_ADDRESS = requireEnv("REASONING_LOG_ADDRESS") as Address;
 
+// Demo-only: behave like a misbehaving agent that ignores its own policy
+// checks, to show the contract — not the agent — is what enforces the policy.
+const IGNORE_LOCAL_CHECKS = process.argv.includes("--ignore-local-checks");
+
 // Static demo metadata for each candidate target. Prices are read live from
 // each contract on-chain below, not hardcoded here, since price is the one
 // fact that actually governs affordability and must never drift from truth.
@@ -64,7 +68,7 @@ function describeFailure(err: unknown): string {
   return String(err);
 }
 
-async function attemptCall(target: Address, priceWei: bigint, reasoning: string): Promise<void> {
+async function buildSignedExecute(target: Address, priceWei: bigint) {
   const nonce = await publicClient.readContract({
     address: ACCOUNT_ADDRESS,
     abi: PasskeyAccountAbi,
@@ -78,11 +82,20 @@ async function attemptCall(target: Address, priceWei: bigint, reasoning: string)
   const challenge = hashCall(call, nonce, chainId, ACCOUNT_ADDRESS);
   const signature = await sessionKey.sign({ hash: challenge });
 
+  return {
+    challenge,
+    args: [call, { authType: 1, nonce, signer: sessionKey.address, signature }] as const,
+  };
+}
+
+async function attemptCall(target: Address, priceWei: bigint, reasoning: string): Promise<void> {
+  const { challenge, args } = await buildSignedExecute(target, priceWei);
+
   const txHash = await walletClient.writeContract({
     address: ACCOUNT_ADDRESS,
     abi: PasskeyAccountAbi,
     functionName: "execute",
-    args: [call, { authType: 1, nonce, signer: sessionKey.address, signature }],
+    args,
     chain: monadTestnet,
   });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -100,6 +113,54 @@ async function attemptCall(target: Address, priceWei: bigint, reasoning: string)
   });
   await publicClient.waitForTransactionReceipt({ hash: logTxHash });
   console.log(`[agent] reasoning logged: ${logTxHash}`);
+}
+
+// A successful spend uses ~120k gas (measured on Monad Testnet); a revert
+// uses less. Monad charges the full gas limit, so keep this tight.
+const FORCED_GAS_LIMIT = 200_000n;
+
+/**
+ * Broadcasts a spend with no local checks at all, to prove the contract
+ * enforces the policy by itself. Passing an explicit gas limit skips viem's
+ * gas estimation, which would otherwise catch the revert locally and never
+ * send it — so the rejection becomes a real, mined, reverted transaction.
+ */
+async function forceUncheckedCall(target: Address, priceWei: bigint): Promise<void> {
+  const { args } = await buildSignedExecute(target, priceWei);
+
+  const txHash = await walletClient.writeContract({
+    address: ACCOUNT_ADDRESS,
+    abi: PasskeyAccountAbi,
+    functionName: "execute",
+    args,
+    chain: monadTestnet,
+    gas: FORCED_GAS_LIMIT,
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  const explorerUrl = `https://testnet.monadscan.com/tx/${txHash}`;
+
+  if (receipt.status === "success") {
+    console.log(`[agent] spend was accepted in block ${receipt.blockNumber}: ${explorerUrl}`);
+    return;
+  }
+
+  // A mined revert's receipt doesn't carry the reason, so replay the identical
+  // call against current state to recover it (the revert rolled back all
+  // state, nonce included, so the replay hits the same check).
+  let reason = "unknown";
+  try {
+    await publicClient.simulateContract({
+      address: ACCOUNT_ADDRESS,
+      abi: PasskeyAccountAbi,
+      functionName: "execute",
+      args,
+      account: sessionKey,
+    });
+  } catch (err) {
+    reason = describeFailure(err);
+  }
+  console.log(`[agent] REJECTED ON-CHAIN: reverted in block ${receipt.blockNumber} (${reason})`);
+  console.log(`[agent] see it on the explorer: ${explorerUrl}`);
 }
 
 async function runOnce(): Promise<void> {
@@ -121,7 +182,7 @@ async function runOnce(): Promise<void> {
     granted: boolean;
   };
 
-  if (!granted || revoked) {
+  if (!IGNORE_LOCAL_CHECKS && (!granted || revoked)) {
     console.log("[agent] session key not active (not granted or revoked) — nothing to do.");
     return;
   }
@@ -133,6 +194,19 @@ async function runOnce(): Promise<void> {
       priceWei: await publicClient.readContract({ address: t.address, abi: PaidAPIAbi, functionName: "pricePerCall" }),
     })),
   );
+
+  if (IGNORE_LOCAL_CHECKS) {
+    // One attempt only, on the cheapest target: the point is to show a
+    // rejection, and each forced attempt burns real gas even when it reverts.
+    const cheapest = [...candidates].sort((a, b) => (a.priceWei < b.priceWei ? -1 : 1))[0];
+    const target = CANDIDATE_TARGETS.find((t) => t.id === cheapest.id)!;
+    console.log(
+      `[agent] --ignore-local-checks: skipping my own checks and the model, and forcing a spend on ` +
+        `"${cheapest.id}" so the contract has to enforce the policy by itself…`,
+    );
+    await forceUncheckedCall(target.address, cheapest.priceWei);
+    return;
+  }
 
   const { ranking } = await prioritizeCandidates({
     candidates,
