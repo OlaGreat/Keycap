@@ -241,6 +241,12 @@ button.secondary {
   letter-spacing: 0.04em;
 }
 
+.stale-hint {
+  margin: -0.4rem 0 0.9rem;
+  font-size: 0.82rem;
+  color: #e8a33d;
+}
+
 .info {
   margin-top: 0.9rem;
   padding-top: 0.9rem;

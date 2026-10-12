@@ -40,6 +40,11 @@ export default function App() {
 
   const [policyDescription, setPolicyDescription] = useState("");
   const [translating, setTranslating] = useState(false);
+  const [translatedDescription, setTranslatedDescription] = useState<string | null>(null);
+
+  // The description and the fields it fills can silently disagree if the text
+  // is typed or edited without re-translating — flag that before a grant.
+  const fieldsStale = policyDescription.trim() !== "" && policyDescription !== translatedDescription;
 
   const [reasoningEntries, setReasoningEntries] = useState<ReasoningEntry[]>([]);
 
@@ -119,6 +124,7 @@ export default function App() {
       const policy = await translatePolicyIntent(policyDescription);
       setSpendLimit(String(policy.spendCapMon));
       setValidHours(String(policy.validForHours));
+      setTranslatedDescription(policyDescription);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -200,6 +206,11 @@ export default function App() {
             <button className="secondary" onClick={handleTranslate} disabled={translating || !policyDescription.trim()} type="button">
               {translating ? "Translating…" : "Translate to policy"}
             </button>
+            {fieldsStale && !translating && (
+              <p className="stale-hint">
+                The fields below don't reflect this description yet. Click Translate to policy.
+              </p>
+            )}
 
             <div className="field-grid">
               <label>
