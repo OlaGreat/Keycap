@@ -1,66 +1,19 @@
-## Foundry
+# Keycap contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Solidity contracts for Keycap, built and tested with [Foundry](https://book.getfoundry.sh). See the [main README](../README.md) for the overview and deployed addresses.
 
-Foundry consists of:
+| Contract | Role |
+|---|---|
+| `PasskeyAccount` | The smart account. `execute()` accepts an owner passkey signature or a session key signature. |
+| `SessionKeyManager` | Session key policy: spend cap, target allowlist, expiry, revocation. |
+| `WebAuthnOwnerValidator` | Verifies the owner's passkey (WebAuthn / P256) signature using audited libraries. |
+| `PasskeyAccountFactory` | Deploys accounts deterministically with CREATE2. |
+| `ReasoningLog` | Lets an agent record on-chain why it made a payment. |
+| `mocks/PaidAPI` | Demo service that charges MON per call. |
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```bash
+git submodule update --init --recursive
+forge test
 ```
 
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Deploy scripts are in `script/`. They read `DEPLOYER_PRIVATE_KEY` from `.env` (see `.env.example`).
