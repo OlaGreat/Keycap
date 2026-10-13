@@ -160,9 +160,6 @@ All 57 tests pass. They cover passkey signature verification (against real captu
 ## Security notes
 
 - Passkey verification uses audited libraries: [daimo-eth/p256-verifier](https://github.com/daimo-eth/p256-verifier) and [base-org/webauthn-sol](https://github.com/base-org/webauthn-sol). Keycap does not implement its own elliptic-curve cryptography.
-- While testing, we found and fixed two permission bugs before launch, each covered by a regression test that fails on the old code:
-  1. Re-granting a key with fewer services kept the dropped services allowed.
-  2. If the account's own address was allowlisted, an agent could re-grant itself a higher limit. Grants now reject the account's own address.
 - The reasoning log is written by the agent. The contract does not force an agent to log, so treat it as an audit trail from well-behaved agents, not a guarantee.
 
 ## Limitations and roadmap
